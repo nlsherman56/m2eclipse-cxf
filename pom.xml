@@ -26,4 +26,10 @@
     <module>org.sonatype.m2e.cxf.feature</module>
   </modules>
   
+  <contributors>
+    <contributor>
+      <name>Stevo Slavić</name>
+    </contributor>
+  </contributors>
+
 </project>
