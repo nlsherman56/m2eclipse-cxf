@@ -7,10 +7,14 @@
 package org.sonatype.m2e.cxf.internal;
 
 import java.io.File;
+import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.maven.plugin.MojoExecution;
-import org.codehaus.plexus.util.Scanner;
+import org.apache.maven.project.MavenProject;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.m2e.core.MavenPlugin;
@@ -20,7 +24,6 @@ import org.sonatype.plexus.build.incremental.BuildContext;
 
 public class CxfBuildParticipant extends MojoExecutionBuildParticipant
 {
-
     public CxfBuildParticipant(final MojoExecution execution)
     {
         super(execution, true);
@@ -31,31 +34,66 @@ public class CxfBuildParticipant extends MojoExecutionBuildParticipant
     {
         final IMaven maven = MavenPlugin.getMaven();
         final BuildContext buildContext = getBuildContext();
+        final MojoExecution mojoExecution = getMojoExecution();
 
-        //
-        // check if any of the grammar files changed
-        //
-        final File source = maven.getMojoParameterValue(getSession().getCurrentProject(), getMojoExecution(), "sourceDirectory", File.class, monitor);
-        final Scanner ds = buildContext.newScanner(source); // delta or full scanner
-        ds.scan();
-        final String[] includedFiles = ds.getIncludedFiles();
-        if((includedFiles == null) || (includedFiles.length <= 0))
+        final MavenProject mavenProject = getMavenProjectFacade().getMavenProject(monitor);
+
+        final File sourceRoot = maven.getMojoParameterValue(mavenProject, mojoExecution, "sourceRoot", File.class, monitor);
+
+        boolean filesModified = false;
+
+        if((sourceRoot != null) && !sourceRoot.exists())
+        {
+            filesModified = true;
+        }
+        else
+        {
+            final List<?> wsdlOptions = maven.getMojoParameterValue(mavenProject, mojoExecution, "wsdlOptions", List.class, monitor);
+
+            // getMojoParameterValue returns an instance of WsdlOption from a different classloader, so casting doesn't work.
+            for(final Object obj : wsdlOptions)
+            {
+                final Class<?> k = obj.getClass();
+                final Method getWsdl = k.getMethod("getWsdl");
+                final Method getBindingFiles = k.getMethod("getBindingFiles");
+
+                final String wsdl = getWsdl.invoke(obj).toString();
+
+                filesModified = (!StringUtils.isEmpty(wsdl) && !ArrayUtils.isEmpty(BuildHelper.getModifiedFiles(buildContext, new File(wsdl))));
+
+                if(!filesModified)
+                {
+                    @SuppressWarnings("unchecked")
+                    final Set<String> bindingFiles = (Set<String>) getBindingFiles.invoke(obj);
+
+                    for(final String bindingFile : bindingFiles)
+                    {
+                        filesModified = (!StringUtils.isEmpty(bindingFile) && !ArrayUtils.isEmpty(BuildHelper.getModifiedFiles(buildContext, new File(bindingFile))));
+
+                        if(filesModified)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if(filesModified)
+                {
+                    break;
+                }
+            }
+        }
+
+        if(!filesModified)
         {
             return null;
         }
 
-        //
-        // execute mojo
-        //
         final Set<IProject> result = super.build(kind, monitor);
 
-        //
-        // tell m2e builder to refresh generated files
-        //
-        final File generated = maven.getMojoParameterValue(getSession().getCurrentProject(), getMojoExecution(), "outputDirectory", File.class, monitor);
-        if(generated != null)
+        if(sourceRoot != null)
         {
-            buildContext.refresh(generated);
+            buildContext.refresh(sourceRoot);
         }
 
         return result;
