@@ -1,8 +1,6 @@
 /*******************************************************************************
- * Copyright (c) 2008 Sonatype, Inc.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
+ * Copyright (c) 2008 Sonatype, Inc. All rights reserved. This program and the accompanying materials are made available under
+ * the terms of the Eclipse Public License v1.0 which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  *******************************************************************************/
 
@@ -20,45 +18,44 @@ import org.eclipse.m2e.core.embedder.IMaven;
 import org.eclipse.m2e.core.project.configurator.MojoExecutionBuildParticipant;
 import org.sonatype.plexus.build.incremental.BuildContext;
 
-public class CxfBuildParticipant
-    extends MojoExecutionBuildParticipant
+public class CxfBuildParticipant extends MojoExecutionBuildParticipant
 {
 
-    public CxfBuildParticipant( MojoExecution execution )
+    public CxfBuildParticipant(final MojoExecution execution)
     {
-        super( execution, true );
+        super(execution, true);
     }
 
     @Override
-    public Set<IProject> build( int kind, IProgressMonitor monitor )
-        throws Exception
+    public Set<IProject> build(final int kind, final IProgressMonitor monitor) throws Exception
     {
-        IMaven maven = MavenPlugin.getMaven();
-        BuildContext buildContext = getBuildContext();
+        final IMaven maven = MavenPlugin.getMaven();
+        final BuildContext buildContext = getBuildContext();
 
         //
         // check if any of the grammar files changed
         //
-        File source = maven.getMojoParameterValue(getSession(), getMojoExecution(), "sourceDirectory", File.class);
-        Scanner ds = buildContext.newScanner( source ); // delta or full scanner
+        final File source = maven.getMojoParameterValue(getSession().getCurrentProject(), getMojoExecution(), "sourceDirectory", File.class, monitor);
+        final Scanner ds = buildContext.newScanner(source); // delta or full scanner
         ds.scan();
-        String[] includedFiles = ds.getIncludedFiles();
-        if (includedFiles == null || includedFiles.length <= 0 )
+        final String[] includedFiles = ds.getIncludedFiles();
+        if((includedFiles == null) || (includedFiles.length <= 0))
         {
             return null;
         }
-        
+
         //
         // execute mojo
         //
-        Set<IProject> result = super.build( kind, monitor );
-        
+        final Set<IProject> result = super.build(kind, monitor);
+
         //
         // tell m2e builder to refresh generated files
         //
-        File generated = maven.getMojoParameterValue(getSession(), getMojoExecution(), "outputDirectory", File.class);
-        if (generated != null) {
-            buildContext.refresh( generated );
+        final File generated = maven.getMojoParameterValue(getSession().getCurrentProject(), getMojoExecution(), "outputDirectory", File.class, monitor);
+        if(generated != null)
+        {
+            buildContext.refresh(generated);
         }
 
         return result;
